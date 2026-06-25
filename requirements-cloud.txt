@@ -1,0 +1,5 @@
+# ثبّت هذا الملف فقط عند استخدام مزود سحابي غير OpenAI.
+-r requirements.txt
+google-cloud-documentai>=3,<4
+azure-ai-documentintelligence>=1.0,<2
+boto3>=1.35,<2
