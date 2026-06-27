@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e506d">
+<title>نظام أرشفة القيود — MMG / ALMOTAHEDA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f7fa; --bg-2:#eef3f8; --panel:#ffffff; --ink:#152030; --ink-2:#3b4a5a;
+  --muted:#6c7a8a; --line:#e2e8ef; --line-2:#d3dae3;
+  --brand:#0e506d; --brand-2:#176b91; --brand-3:#1c86b6;
+  --accent:#ffb43d; --accent-2:#ff8a00;
+  --ok:#16a34a; --ok-bg:#e6f6ec; --warn:#d97706; --warn-bg:#fdf2e3;
+  --danger:#dc2626; --danger-bg:#fdecec; --info:#2563eb; --info-bg:#e8effd;
+  --radius:14px; --radius-sm:10px; --shadow:0 4px 18px rgba(15,40,70,.06);
+  --shadow-lg:0 14px 40px rgba(15,40,70,.10);
+  --font:'Cairo','Tajawal',Tahoma,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font); background:var(--bg); color:var(--ink);
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+a{color:var(--brand-2);text-decoration:none}
+a:hover{color:var(--brand)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+
+/* ===== App shell ===== */
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.sidebar{
+  background:linear-gradient(180deg,#0e506d 0%,#0a3e55 100%);
+  color:#cfe2ee; padding:18px 14px; position:sticky; top:0; height:100vh; overflow:auto;
+  display:flex; flex-direction:column; gap:6px;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 10px 16px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:8px}
+.brand .logo{
+  width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#ffb43d,#ff8a00);
+  display:flex;align-items:center;justify-content:center;font-weight:900;color:#3a2400;font-size:18px;
+  box-shadow:0 6px 14px rgba(255,138,0,.35);
+}
+.brand .titles{display:flex;flex-direction:column;line-height:1.25}
+.brand .titles b{color:#fff;font-size:15px}
+.brand .titles small{color:#9fc0d4;font-size:11px}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.nav button{
+  background:transparent;border:0;color:#bcd3e0;text-align:right;
+  padding:11px 12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:10px;
+  font-weight:600;transition:background .18s, color .18s, transform .18s;
+}
+.nav button .ic{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;opacity:.9}
+.nav button:hover{background:rgba(255,255,255,.06);color:#fff;transform:translateX(-3px)}
+.nav button.active{background:rgba(255,255,255,.13);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.nav .sep{margin:10px 6px 4px;font-size:11px;color:#7ea3b8;letter-spacing:.5px}
+.user-card{
+  margin-top:auto;background:rgba(255,255,255,.07);border-radius:12px;padding:10px 12px;
+  display:flex;align-items:center;gap:10px;
+}
+.user-card .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1c86b6,#176b91);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.user-card .meta{flex:1;min-width:0}
+.user-card .meta b{color:#fff;display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-card .meta small{color:#9fc0d4;font-size:11px}
+.user-card button{background:transparent;border:0;color:#cfe2ee;cursor:pointer;padding:6px;border-radius:6px}
+.user-card button:hover{background:rgba(255,255,255,.08);color:#fff}
+
+.main{padding:22px 26px 80px;min-width:0}
+.topbar{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:22px;font-weight:800;color:var(--ink)}
+.topbar .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.topbar .spacer{flex:1}
+.search-global{
+  display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+  padding:8px 12px;border-radius:10px;box-shadow:var(--shadow);min-width:260px;
+}
+.search-global input{border:0;outline:0;background:transparent;flex:1;font-size:14px}
+.search-global .ic{color:var(--muted)}
+
+/* ===== Cards & panels ===== */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card .hd{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.card .hd h3{margin:0;font-size:15px;font-weight:700}
+.card .hd .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.card .bd{padding:16px 18px}
+.grid{display:grid;gap:16px}
+.grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.grid.cols-4{grid-template-columns:repeat(4,1fr)}
+.grid.cols-5{grid-template-columns:repeat(5,1fr)}
+@media (max-width:1100px){.grid.cols-4,.grid.cols-5{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:780px){.grid.cols-2,.grid.cols-3,.grid.cols-4,.grid.cols-5{grid-template-columns:1fr}}
+.section{margin-bottom:24px}
+.section-title{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:14px;color:var(--ink-2);font-weight:700}
+
+/* ===== KPI tiles ===== */
+.kpi{display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:14px;background:var(--panel);
+  border:1px solid var(--line);box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi .label{color:var(--muted);font-size:12px;font-weight:600}
+.kpi .value{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-.5px}
+.kpi .foot{color:var(--muted);font-size:11px}
+.kpi .ic{position:absolute;left:-12px;bottom:-12px;font-size:80px;color:rgba(14,80,109,.05)}
+.kpi.ok .value{color:var(--ok)} .kpi.ok{border-color:#bce5c9}
+.kpi.warn .value{color:var(--warn)} .kpi.warn{border-color:#f5d499}
+.kpi.danger .value{color:var(--danger)} .kpi.danger{border-color:#f3bcbc}
+.kpi.info .value{color:var(--info)} .kpi.info{border-color:#bccfe6}
+
+/* ===== Forms ===== */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--ink-2);font-weight:600;margin-bottom:5px}
+.field input,.field select,.field textarea{
+  width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:#fbfcfe;
+  outline:0;transition:border .15s, box-shadow .15s;font-size:14px;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--brand-2);box-shadow:0 0 0 3px rgba(23,107,145,.13);background:#fff
+}
+.field .hint{font-size:11px;color:var(--muted);margin-top:4px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row .field{flex:1;min-width:160px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;justify-content:center;
+  background:var(--brand-2);color:#fff;border:0;border-radius:10px;padding:10px 16px;
+  cursor:pointer;font-weight:700;font-size:14px;transition:transform .12s, box-shadow .15s, background .15s;
+  box-shadow:0 4px 12px rgba(23,107,145,.18);
+}
+.btn:hover{background:var(--brand);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.ghost{background:transparent;color:var(--brand-2);box-shadow:inset 0 0 0 1px var(--line-2)}
+.btn.ghost:hover{background:#f0f6fa}
+.btn.danger{background:var(--danger);box-shadow:0 4px 12px rgba(220,38,38,.2)}
+.btn.warn{background:var(--warn);box-shadow:0 4px 12px rgba(217,119,6,.2)}
+.btn.ok{background:var(--ok);box-shadow:0 4px 12px rgba(22,163,74,.2)}
+.btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+.btn[disabled]{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* ===== Tables ===== */
+.table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--line)}
+table.data{width:100%;border-collapse:collapse;background:var(--panel);font-size:13.5px}
+table.data th,table.data td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line)}
+table.data thead th{background:#f1f6fa;color:var(--ink-2);font-weight:700;position:sticky;top:0;font-size:12.5px;white-space:nowrap}
+table.data tbody tr{transition:background .12s}
+table.data tbody tr:hover{background:#f7fafd}
+table.data tbody tr:last-child td{border-bottom:0}
+table.data td.num,table.data th.num{text-align:left;direction:ltr;font-variant-numeric:tabular-nums}
+.row-num{font-variant-numeric:tabular-nums;font-weight:700;color:var(--brand-2);direction:ltr;text-align:left}
+.amount{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);direction:ltr;text-align:left}
+table.data td.clamp{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== Badges ===== */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.7}
+.badge.gray{background:#eef1f5;color:#5a6776}
+.badge.blue{background:var(--info-bg);color:var(--info)}
+.badge.green{background:var(--ok-bg);color:var(--ok)}
+.badge.amber{background:var(--warn-bg);color:var(--warn)}
+.badge.red{background:var(--danger-bg);color:var(--danger)}
+.badge.brand{background:#e1eff5;color:var(--brand)}
+
+/* ===== Filters bar ===== */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.filters .field{margin:0;min-width:160px;flex:1}
+.filters .actions{display:flex;gap:8px}
+
+/* ===== Modal ===== */
+.modal-back{
+  position:fixed;inset:0;background:rgba(10,30,50,.5);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:50;padding:18px;
+}
+.modal-back.show{display:flex;animation:fade .2s}
+.modal{background:var(--panel);border-radius:16px;max-width:720px;width:100%;max-height:90vh;overflow:auto;
+  box-shadow:var(--shadow-lg);animation:pop .18s}
+.modal .hd{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#fff;z-index:1}
+.modal .hd h3{margin:0;flex:1;font-size:16px}
+.modal .hd .x{background:transparent;border:0;cursor:pointer;color:var(--muted);font-size:20px;padding:6px 10px;border-radius:8px}
+.modal .hd .x:hover{background:#f1f4f8;color:var(--ink)}
+.modal .bd{padding:18px 20px 22px}
+
+/* ===== Toasts ===== */
+.toasts{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{
+  background:#0e2a3d;color:#fff;padding:11px 18px;border-radius:10px;box-shadow:var(--shadow-lg);
+  font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:10px;max-width:90vw;
+  animation:slide-down .25s;pointer-events:auto;border:1px solid rgba(255,255,255,.1);
+}
+.toast.ok{background:#0f5132} .toast.err{background:#7d1a1a} .toast.warn{background:#7a3d00}
+
+/* ===== Attachments viewer ===== */
+.attach-list{display:flex;flex-direction:column;gap:14px}
+.attach{
+  border:1px solid var(--line);border-radius:12px;background:#fbfcfe;overflow:hidden;
+  display:grid;grid-template-columns:240px 1fr;gap:0;
+}
+.attach .preview{background:#eef2f6;min-height:180px;display:flex;align-items:center;justify-content:center}
+.attach .preview img,.attach .preview embed,.attach .preview object{width:100%;height:240px;object-fit:contain;background:#fff}
+.attach .preview .ph{color:var(--muted);text-align:center;padding:20px}
+.attach .meta{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.attach .meta b{font-size:13.5px}
+.attach .meta small{color:var(--muted);font-size:11.5px}
+.attach .meta .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+@media (max-width:780px){.attach{grid-template-columns:1fr}}
+
+/* ===== Entry header ===== */
+.entry-head{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;margin-bottom:14px}
+.entry-head .num{font-size:34px;font-weight:900;color:var(--brand);letter-spacing:-.5px}
+.entry-head .meta-line{color:var(--muted);font-size:13px;display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+.entry-head .meta-line span b{color:var(--ink-2);font-weight:700}
+
+/* ===== Timeline ===== */
+.timeline{position:relative;padding-right:18px;border-right:2px solid var(--line)}
+.timeline .item{position:relative;padding:0 14px 14px 0}
+.timeline .item::before{content:"";position:absolute;right:-25px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--brand-2);box-shadow:0 0 0 3px #fff}
+.timeline .item .when{color:var(--muted);font-size:11.5px}
+.timeline .item .what{font-weight:600;font-size:13.5px}
+.timeline .item .who{color:var(--ink-2);font-size:12.5px}
+
+/* ===== Empty state ===== */
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+.empty .ic{font-size:48px;opacity:.5;margin-bottom:10px}
+.empty h4{margin:0 0 4px;color:var(--ink-2);font-size:15px}
+.empty p{margin:0;font-size:13px}
+
+/* ===== Setup / login screens ===== */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:
+  radial-gradient(circle at 20% 20%, rgba(28,134,182,.25), transparent 40%),
+  radial-gradient(circle at 80% 80%, rgba(255,180,61,.18), transparent 40%),
+  linear-gradient(135deg,#0e506d,#0a3e55);
+  padding:20px;
+}
+.auth-card{background:var(--panel);border-radius:20px;padding:36px 32px;width:100%;max-width:420px;box-shadow:var(--shadow-lg)}
+.auth-card .logo{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#ffb43d,#ff8a00);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#3a2400;font-size:24px;box-shadow:0 10px 24px rgba(255,138,0,.35)}
+.auth-card h2{text-align:center;margin:0 0 4px;font-size:20px;color:var(--ink)}
+.auth-card .lead{text-align:center;color:var(--muted);font-size:13px;margin:0 0 22px}
+
+/* ===== Misc ===== */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+.skeleton{background:linear-gradient(90deg,#eef2f6 25%,#f7fafd 50%,#eef2f6 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px}
+.hide{display:none!important}
+.muted{color:var(--muted)}
+.text-center{text-align:center}
+.flex{display:flex;gap:8px;align-items:center}
+.flex.between{justify-content:space-between}
+.flex.wrap{flex-wrap:wrap}
+.flex.end{justify-content:flex-end}
+.grow{flex:1}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:#eef2f6;color:var(--ink-2);font-size:11.5px;font-weight:600}
+.divider{height:1px;background:var(--line);margin:14px 0}
+
+/* Animations */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes slide-down{from{transform:translateY(-12px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+
+/* Mobile sidebar */
+@media (max-width:880px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;top:0;right:-280px;width:260px;z-index:60;transition:right .25s;height:100vh}
+  .sidebar.open{right:0}
+  .main{padding:16px 14px 70px}
+  .menu-toggle{display:inline-flex!important}
+}
+.menu-toggle{display:none;background:var(--panel);border:1px solid var(--line);padding:8px 10px;border-radius:10px;cursor:pointer}
+.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55}
+.backdrop.show{display:block}
+</style>
+</head>
+<body>
+
+<!-- ===================== AUTH SCREEN ===================== -->
+<div id="authScreen" class="auth-wrap hide">
+  <div class="auth-card">
+    <div class="logo">MMG</div>
+    <h2 id="authTitle">تسجيل الدخول</h2>
+    <p class="lead" id="authLead">نظام أرشفة القيود — MMG / ALMOTAHEDA</p>
+    <form id="authForm" autocomplete="off">
+      <div class="field" id="nameField" style="display:none">
+        <label>الاسم الكامل</label>
+        <input id="authDisplayName" type="text" placeholder="مثال: ا. أحمد مبارك">
+      </div>
+      <div class="field">
+        <label>اسم المستخدم</label>
+        <input id="authUsername" type="text" placeholder="مثال: a.mobarak" required>
+      </div>
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input id="authPassword" type="password" placeholder="••••••••" required>
+      </div>
+      <button class="btn" type="submit" style="width:100%;margin-top:6px">
+        <span id="authBtnText">دخول</span>
+      </button>
+    </form>
+    <p id="authError" class="text-center" style="color:var(--danger);font-size:12.5px;margin-top:10px;min-height:18px"></p>
+  </div>
+</div>
+
+<!-- ===================== MAIN APP ===================== -->
+<div id="app" class="app hide">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo">MMG</div>
+      <div class="titles">
+        <b>نظام أرشفة القيود</b>
+        <small>MMG / ALMOTAHEDA — v2.0</small>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="dashboard" class="active"><span class="ic">▦</span> لوحة الأرشيف</button>
+      <button data-view="entries"><span class="ic">📜</span> القيود</button>
+      <button data-view="import"><span class="ic">📥</span> تحديث كشف الأرشيف</button>
+      <button data-view="paper"><span class="ic">📑</span> استيراد كشف الورق</button>
+      <div class="sep">الأرشيف</div>
+      <button data-view="documents"><span class="ic">📎</span> المستندات</button>
+      <button data-view="reports"><span class="ic">📊</span> التقارير</button>
+      <div class="sep">الإدارة</div>
+      <button data-view="audit"><span class="ic">🕒</span> سجل النشاط</button>
+      <button data-view="users"><span class="ic">👥</span> المستخدمون</button>
+      <button data-view="settings"><span class="ic">⚙</span> الإعدادات</button>
+    </nav>
+    <div class="user-card">
+      <div class="av" id="userAvatar">؟</div>
+      <div class="meta">
+        <b id="userName">—</b>
+        <small id="userRole">—</small>
+      </div>
+      <button title="خروج" onclick="App.logout()">⎋</button>
+    </div>
+  </aside>
+
+  <div class="backdrop" id="backdrop" onclick="App.toggleMenu(false)"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="App.toggleMenu()">☰</button>
+      <div>
+        <h1 id="viewTitle">لوحة المراجع</h1>
+        <div class="sub" id="viewSub">نظرة سريعة على أولويات اليوم</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="search-global">
+        <span class="ic">🔍</span>
+        <input id="globalSearch" placeholder="بحث برقم القيد أو الاسم..." onkeydown="if(event.key==='Enter')App.gotoEntryFromSearch()">
+      </div>
+    </div>
+
+    <div id="view"></div>
+  </main>
+</div>
+
+<!-- ===================== MODAL ===================== -->
+<div class="modal-back" id="modalBack">
+  <div class="modal" id="modal">
+    <div class="hd">
+      <h3 id="modalTitle">عنوان</h3>
+      <button class="x" onclick="App.closeModal()">✕</button>
+    </div>
+    <div class="bd" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ===================== TOASTS ===================== -->
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* =========================================================
+   نظام أرشفة القيود — Single Page App
+   ========================================================= */
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+const fmtMoney = (n) => (Number(n||0)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' EGP';
+const fmtNum = (n) => (Number(n||0)).toLocaleString('en-US');
+const fmtSize = (b) => {
+  b = Number(b||0);
+  if(b<1024) return b+' B';
+  if(b<1024*1024) return (b/1024).toFixed(1)+' KB';
+  return (b/1024/1024).toFixed(2)+' MB';
+};
+const fmtDate = (s) => {
+  if(!s) return '—';
+  try { return new Date(s.replace(' ','T')).toLocaleString('ar-EG',{dateStyle:'short',timeStyle:'short'}); }
+  catch { return s; }
+};
+const esc = (s) => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const qs = (params) => '?' + new URLSearchParams(params).toString();
+
+const STATUS_BADGE = {
+  'بانتظار المرفقات':'gray','تم رفع المرفقات':'blue','مؤرشف':'green'
+};
+
+const App = {
+  state: { user:null, view:'dashboard', entries:[], entry:null, modalMode:'', filters:{} },
+
+  async init(){
+    // Check if any users exist
+    const setup = await api('/api/setup');
+    if(!setup.has_users){
+      this.showAuth('setup');
+    } else {
+      const me = await api('/api/me');
+      if(me.user){ this.onLogin(me.user); }
+      else { this.showAuth('login'); }
+    }
+    this.bindNav();
+    this.bindAuth();
+  },
+
+  bindNav(){
+    $$('#nav button').forEach(b => b.addEventListener('click', () => this.navigate(b.dataset.view)));
+  },
+
+  bindAuth(){
+    $('#authForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.handleAuth();
+    });
+  },
+
+  showAuth(mode){
+    $('#app').classList.add('hide');
+    $('#authScreen').classList.remove('hide');
+    const isSetup = mode === 'setup';
+    $('#authTitle').textContent = isSetup ? 'إنشاء حساب المدير الأول' : 'تسجيل الدخول';
+    $('#authLead').textContent = isSetup ? 'أول تشغيل للنظام — أنشئ حساب المدير' : 'نظام أرشفة القيود — MMG / ALMOTAHEDA';
+    $('#nameField').style.display = isSetup ? 'block' : 'none';
+    $('#authDisplayName').required = isSetup;
+    $('#authBtnText').textContent = isSetup ? 'إنشاء الحساب' : 'دخول';
+    if(isSetup) $('#authDisplayName').focus(); else $('#authUsername').focus();
+  },
+
+  async handleAuth(){
+    const errEl = $('#authError'); errEl.textContent = '';
+    const btn = $('#authForm button[type=submit]');
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> جارٍ المعالجة...';
+    try {
+      const isSetup = $('#nameField').style.display !== 'none';
+      const body = {
+        username: $('#authUsername').value.trim(),
+        password: $('#authPassword').value,
+      };
+      if(isSetup){
+        body.display_name = $('#authDisplayName').value.trim();
+        body.role = 'admin';
+        const r = await api('/api/users', { method:'POST', body });
+        if(!r.ok) throw new Error(r.error || 'فشل إنشاء الحساب');
+      }
+      const r = await api('/api/login', { method:'POST', body });
+      if(!r.ok) throw new Error(r.error || 'بيانات الدخول غير صحيحة');
+      this.onLogin(r.user);
+    } catch(e){
+      errEl.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = old;
+    }
+  },
+
+  onLogin(user){
+    this.state.user = user;
+    $('#authScreen').classList.add('hide');
+    $('#app').classList.remove('hide');
+    $('#userName').textContent = user.display_name || user.username;
+    $('#userRole').textContent = user.role === 'admin' ? 'مدير النظام' : 'مستخدم';
+    $('#userAvatar').textContent = (user.display_name || user.username).trim().charAt(0);
+    // hide users tab if not admin
+    $('button[data-view="users"]').style.display = user.role === 'admin' ? '' : 'none';
+    this.navigate('dashboard');
+  },
+
+  async logout(){
+    await api('/api/logout', { method:'POST' });
+    location.reload();
+  },
+
+  toggleMenu(force){
+    const sb = $('#sidebar'), bd = $('#backdrop');
+    const open = force === undefined ? !sb.classList.contains('open') : force;
+    sb.classList.toggle('open', open);
+    bd.classList.toggle('show', open);
+  },
+
+  navigate(view){
+    this.state.view = view;
+    $$('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    this.toggleMenu(false);
+    const titles = {
+      dashboard:['لوحة الأرشيف','نظرة سريعة على حالة القيود'],
+      entries:['القيود','بحث وفلترة في كشف الأرشيف المعتمد'],
+      import:['تحديث كشف الأرشيف','رفع Excel/CSV لتحديث القيود المعتمدة'],
+      paper:['استيراد كشف الورق','تحديد القيود الموجودة ورقيًا'],
+      documents:['المستندات','كل المرفقات المرفوعة'],
+      reports:['التقارير','تصدير Excel/CSV/JSON'],
+      audit:['سجل النشاط','كل من قام بكل حركة'],
+      users:['المستخدمون','إدارة الحسابات (للمدير فقط)'],
+      settings:['الإعدادات','حالة النظام'],
+    };
+    const [t,s] = titles[view] || [view,''];
+    $('#viewTitle').textContent = t;
+    $('#viewSub').textContent = s;
+    const v = $('#view');
+    v.innerHTML = '<div class="empty"><div class="spinner" style="font-size:24px"></div><p style="margin-top:8px">جارٍ التحميل...</p></div>';
+    const handler = {
+      dashboard:Views.dashboard, entries:Views.entries, import:Views.importXlsx,
+      paper:Views.paper, documents:Views.documents,
+      reports:Views.reports, audit:Views.audit, users:Views.users, settings:Views.settings,
+    }[view];
+    Promise.resolve(handler.call(Views)).catch(e => {
+      v.innerHTML = `<div class="card"><div class="bd"><div class="empty"><div class="ic">⚠</div><h4>تعذر التحميل</h4><p>${esc(e.message)}</p></div></div></div>`;
+    });
+  },
+
+  gotoEntryFromSearch(){
+    const q = $('#globalSearch').value.trim();
+    if(!q) return;
+    Views.openEntryByTransNo(q);
+    $('#globalSearch').value = '';
+  },
+
+  openModal(title, bodyHtml, mode=''){
+    $('#modalTitle').textContent = title;
+    $('#modalBody').innerHTML = bodyHtml;
+    $('#modalBack').classList.add('show');
+    this.state.modalMode = mode;
+  },
+  closeModal(){ $('#modalBack').classList.remove('show'); this.state.modalMode=''; },
+
+  toast(msg, kind=''){
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.innerHTML = `<span>${kind==='ok'?'✓':kind==='err'?'✕':kind==='warn'?'!':'ℹ'}</span><span>${esc(msg)}</span>`;
+    $('#toasts').appendChild(el);
+    setTimeout(() => { el.style.opacity='0'; el.style.transform='translateY(-8px)'; el.style.transition='all .25s'; }, 2600);
+    setTimeout(() => el.remove(), 2950);
+  },
+};
+
+async function api(path, opts={}){
+  const fetchOpts = { method: opts.method||'GET', credentials:'same-origin', headers: opts.headers||{} };
+  if(opts.body){
+    if(opts.body instanceof FormData){ fetchOpts.body = opts.body; }
+    else { fetchOpts.headers['Content-Type'] = 'application/json'; fetchOpts.body = JSON.stringify(opts.body); }
+  }
+  try {
+    const r = await fetch(path, fetchOpts);
+    const ct = r.headers.get('Content-Type') || '';
+    if(ct.includes('application/json')){
+      const data = await r.json();
+      if(!r.ok && !data.error) data.error = `HTTP ${r.status}`;
+      return data;
+    }
+    // Non-JSON: return blob/text wrapper
+    const blob = await r.blob();
+    return { ok: r.ok, status: r.status, blob };
+  } catch(e){
+    return { ok:false, error:e.message };
+  }
+}
+
+/* =========================================================
+   Views
+   ========================================================= */
+const Views = {
+
+  async dashboard(){
+    const d = await api('/api/dashboard');
+    if(!d.ok) throw new Error(d.error);
+    const s = await api('/api/stats');
+    const html = `
+      <div class="section">
+        <div class="grid cols-4">
+          <div class="kpi info"><div class="ic">📋</div><div class="label">إجمالي القيود</div><div class="value">${fmtNum(s.total||0)}</div><div class="foot">${fmtNum(s.scanned||0)} لها مرفقات</div></div>
+          <div class="kpi ok"><div class="ic">📦</div><div class="label">مؤرشفة</div><div class="value">${fmtNum(d.archived||0)}</div><div class="foot">اكتملت دورتها</div></div>
+          <div class="kpi amber"><div class="ic">⏳</div><div class="label">قيد المعالجة</div><div class="value">${fmtNum(d.pending||0)}</div><div class="foot">بانتظار أو رُفعت مرفقاتها</div></div>
+          <div class="kpi danger"><div class="ic">📎</div><div class="label">بدون مرفقات</div><div class="value">${fmtNum(d.missing||0)}</div><div class="foot">${fmtNum(s.paper_missing||0)} غير موجودة ورقيًا</div></div>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <div class="hd"><h3>قيود تحتاج إكمال</h3><span class="muted" style="margin-right:auto">${(d.queue||[]).length} قيد</span></div>
+          <div class="bd" style="padding:0">
+            ${(d.queue||[]).length===0 ? this._empty('كل القيود مؤرشفة ✨') : `
+            <div class="table-wrap" style="border:0;border-radius:0">
+              <table class="data">
+                <thead><tr><th class="num">رقم القيد</th><th>الجهة</th><th>المحاسب</th><th class="num">المبلغ</th><th>الحالة</th><th></th></tr></thead>
+                <tbody>
+                  ${d.queue.slice(0,12).map(e => `
+                    <tr>
+                      <td class="row-num">${esc(e.trans_no)}</td>
+                      <td>${esc(e.name||'—')}</td>
+                      <td>${esc(e.accountant||'—')}</td>
+                      <td class="amount">${fmtMoney(e.amount)}</td>
+                      <td>${this._statusBadge(e.status)}</td>
+                      <td><button class="btn ghost sm" onclick="Views.openEntryByTransNo('${esc(e.trans_no)}')">افتح</button></td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>`}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><h3>آخر النشاطات</h3><span class="muted" style="margin-right:auto">${(d.recent||[]).length}</span></div>
+          <div class="bd">
+            ${(d.recent||[]).length===0 ? this._empty('لا يوجد نشاط بعد') : `
+            <div class="timeline">
+              ${(d.recent||[]).slice(0,10).map(a => `
+                <div class="item">
+                  <div class="when">${fmtDate(a.created_at)}</div>
+                  <div class="what">${esc(a.action)}</div>
+                  <div class="who">${esc(a.user_name||'—')} • ${esc(a.entity_type)}:${esc(a.entity_id)}</div>
+                </div>`).join('')}
+            </div>`}
+          </div>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:18px">
+        <div class="card">
+          <div class="hd"><h3>توزيع القيود حسب الحالة</h3></div>
+          <div class="bd">
+            ${this._statusBars(s.by_status||{})}
+          </div>
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async entries(){
+    const meta = await api('/api/meta');
+    const f = App.state.filters.entries || {};
+    const params = {};
+    if(f.q) params.q = f.q;
+    if(f.status) params.status = f.status;
+    if(f.accountant) params.accountant = f.accountant;
+    if(f.missing) params.missing = 1;
+    if(f.paper) params.paper = f.paper;
+    const data = await api('/api/entries'+qs(params));
+    if(!data.ok) throw new Error(data.error);
+    App.state.entries = data.entries;
+
+    const html = `
+      <div class="card">
+        <div class="bd">
+          <div class="filters">
+            <div class="field"><label>بحث</label><input id="fQ" value="${esc(f.q||'')}" placeholder="رقم قيد / اسم / وصف"></div>
+            <div class="field"><label>الحالة</label>
+              <select id="fStatus">
+                <option value="">— الكل —</option>
+                ${(meta.statuses||[]).map(s => `<option ${f.status===s?'selected':''}>${esc(s)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field"><label>المحاسب</label>
+              <select id="fAccountant">
+                <option value="">— الكل —</option>
+                ${(meta.accountants||[]).map(a => `<option ${f.accountant===a?'selected':''}>${esc(a)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field"><label>الورق</label>
+              <select id="fPaper">
+                <option value="">— الكل —</option>
+                <option value="present" ${f.paper==='present'?'selected':''}>موجود ورقيًا</option>
+                <option value="missing" ${f.paper==='missing'?'selected':''}>غير موجود ورقيًا</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:auto;align-self:center">
+              <label style="display:block;margin-bottom:5px">&nbsp;</label>
+              <label class="tag" style="cursor:pointer;padding:8px 10px">
+                <input type="checkbox" id="fMissing" ${f.missing?'checked':''} style="margin-right:4px"> بدون مرفقات
+              </label>
+            </div>
+            <div class="actions">
+              <button class="btn ghost" onclick="Views.resetEntriesFilters()">تصفية</button>
+              <button class="btn" onclick="Views.applyEntriesFilters()">تطبيق</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th class="num">رقم القيد</th><th>النوع</th><th class="num">التاريخ</th><th>Num</th>
+                  <th>Name</th><th>Memo</th><th>المحاسب</th><th class="num">المبلغ</th>
+                  <th>الحالة</th><th class="num">مرفقات</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.entries.length===0 ? `<tr><td colspan="11">${this._emptyRow('لا توجد قيود مطابقة')}</td></tr>` :
+                  data.entries.map(e => `
+                  <tr>
+                    <td class="row-num">${esc(e.trans_no)}</td>
+                    <td>${esc(e.entry_type||'—')}</td>
+                    <td class="num">${esc(e.entry_date||'—')}</td>
+                    <td>${esc(e.num||'—')}</td>
+                    <td>${esc(e.name||'—')}</td>
+                    <td class="clamp" title="${esc(e.description||'')}">${esc(e.description||'—')}</td>
+                    <td>${esc(e.accountant||'—')}</td>
+                    <td class="amount">${fmtMoney(e.amount)}</td>
+                    <td>${this._statusBadge(e.status)}</td>
+                    <td class="num"><span class="tag">${e.attachments_count||0}</span></td>
+                    <td><button class="btn ghost sm" onclick="Views.openEntryByTransNo('${esc(e.trans_no)}')">افتح</button></td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <p class="muted" style="font-size:12px;margin-top:10px">عرض ${data.entries.length} قيد — الحد الأقصى 200. استخدم البحث للتضييق.</p>
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  applyEntriesFilters(){
+    App.state.filters.entries = {
+      q: $('#fQ').value.trim(),
+      status: $('#fStatus').value,
+      accountant: $('#fAccountant').value,
+      paper: $('#fPaper').value,
+      missing: $('#fMissing').checked,
+    };
+    this.entries();
+  },
+  resetEntriesFilters(){
+    App.state.filters.entries = {};
+    this.entries();
+  },
+
+  async openEntryByTransNo(transNo){
+    const data = await api('/api/entries/'+encodeURIComponent(transNo));
+    if(!data.ok){ App.toast(data.error||'القيد غير موجود','err'); return; }
+    this.showEntry(data);
+  },
+
+  showEntry(data){
+    const e = data.entry;
+    const attachments = data.attachments || [];
+    const notes = data.notes || [];
+    const audit = data.audit || [];
+    const paperYes = !!(e.paper_received*1);
+    const isArchived = e.status === 'مؤرشف';
+    const html = `
+      <div class="entry-head">
+        <div>
+          <div class="num">#${esc(e.trans_no)}</div>
+          <div class="meta-line">
+            <span><b>النوع:</b> ${esc(e.entry_type||'—')}</span>
+            <span><b>التاريخ:</b> ${esc(e.entry_date||'—')}</span>
+            <span><b>المحاسب:</b> ${esc(e.accountant||'—')}</span>
+            <span><b>الحالة:</b> ${this._statusBadge(e.status)}</span>
+          </div>
+          <div class="meta-line" style="margin-top:6px">
+            <span><b>الجهة:</b> ${esc(e.supplier||e.client||e.name||'—')}</span>
+            ${e.project ? `<span><b>المشروع:</b> ${esc(e.project)}</span>` : ''}
+            ${e.cost_center ? `<span><b>مركز التكلفة:</b> ${esc(e.cost_center)}</span>` : ''}
+            <span><b>المبلغ:</b> <span class="amount">${fmtMoney(e.amount)}</span></span>
+            <span><b>Num:</b> ${esc(e.num||'—')}</span>
+          </div>
+          ${e.description ? `<div style="margin-top:6px;color:var(--ink-2)"><b>البيان:</b> ${esc(e.description)}</div>` : ''}
+        </div>
+        <div class="flex wrap" style="align-items:flex-start">
+          <button class="btn ghost sm" onclick="window.open('/api/entries/${encodeURIComponent(e.trans_no)}/cover-sheet','_blank')">🖨 غلاف QR</button>
+          <a class="btn ghost sm" href="/api/entries/${encodeURIComponent(e.trans_no)}?format=json" target="_blank">JSON</a>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <div class="hd">
+            <h3>المرفقات (${attachments.length})</h3>
+            <span class="muted" style="margin-right:auto">${attachments.length} ملف</span>
+          </div>
+          <div class="bd">
+            <div class="field">
+              <label>رفع مرفقات جديدة (PDF / صور)</label>
+              <input type="file" id="uploadFiles" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.tif,.tiff,.heic">
+            </div>
+            <button class="btn sm" onclick="Views.uploadAttachments('${esc(e.trans_no)}')">رفع</button>
+            <hr>
+            ${attachments.length===0 ? this._empty('لا توجد مرفقات بعد — ارفع أول ملف') : `
+            <div class="attach-list">
+              ${attachments.map(a => this._attachCard(a)).join('')}
+            </div>`}
+          </div>
+        </div>
+
+        <div class="flex" style="flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="hd"><h3>سير العمل</h3></div>
+            <div class="bd">
+              <div class="flex wrap">
+                ${isArchived ? `
+                  <span class="badge brand" style="padding:8px 14px;font-size:13px">📦 هذا القيد مؤرشف</span>
+                  <button class="btn ghost sm" onclick="Views.workflow('${esc(e.trans_no)}','unarchive')">↩ إلغاء الأرشفة</button>
+                ` : `
+                  <button class="btn sm" style="background:var(--brand)" onclick="Views.workflow('${esc(e.trans_no)}','archive')">📦 أرشفة القيد</button>
+                `}
+              </div>
+              <hr>
+              <div class="field">
+                <label>وجود الورق</label>
+                <div class="flex">
+                  <label class="tag" style="padding:8px 12px;cursor:pointer">
+                    <input type="radio" name="paper" value="1" ${paperYes?'checked':''} style="margin-left:6px" onchange="Views.setPaper('${esc(e.trans_no)}',true)"> موجود ورقيًا
+                  </label>
+                  <label class="tag" style="padding:8px 12px;cursor:pointer">
+                    <input type="radio" name="paper" value="0" ${!paperYes?'checked':''} style="margin-left:6px" onchange="Views.setPaper('${esc(e.trans_no)}',false)"> غير موجود
+                  </label>
+                  ${e.paper_received_by ? `<span class="muted" style="align-self:center">آخر تحديث: ${esc(e.paper_received_by)} • ${fmtDate(e.paper_received_at)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd"><h3>ملاحظات (${notes.length})</h3></div>
+            <div class="bd">
+              <div class="field">
+                <textarea id="noteText" rows="2" placeholder="اكتب ملاحظة..."></textarea>
+              </div>
+              <button class="btn sm" onclick="Views.addNote('${esc(e.trans_no)}')">إضافة ملاحظة</button>
+              <hr>
+              ${notes.length ? notes.map(n => `
+                <div style="border-right:3px solid var(--brand-2);padding:6px 12px;margin-bottom:8px;background:#f7fafd;border-radius:6px">
+                  <div class="flex between"><b style="font-size:12.5px">${esc(n.author||'—')}</b><span class="muted" style="font-size:11px">${fmtDate(n.created_at)}</span></div>
+                  <div style="font-size:13px;margin-top:3px">${esc(n.note)}</div>
+                </div>`).join('') : `<p class="muted" style="font-size:13px">لا توجد ملاحظات.</p>`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="hd"><h3>سجل القيد</h3></div>
+        <div class="bd" style="padding:0">
+          ${audit.length===0 ? `<div class="bd">${this._empty('لا يوجد سجل')}</div>` : `
+          <div class="table-wrap" style="border:0">
+            <table class="data">
+              <thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>التفاصيل</th></tr></thead>
+              <tbody>
+                ${audit.map(a => `
+                  <tr>
+                    <td>${fmtDate(a.created_at)}</td>
+                    <td>${esc(a.user_name||'—')}</td>
+                    <td>${esc(a.action)}</td>
+                    <td style="font-size:12px;color:var(--muted);max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.new_value||'').slice(0,200))}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  _attachCard(a){
+    const isPdf = (a.mime||'').includes('pdf') || (a.original_name||'').toLowerCase().endsWith('.pdf');
+    const isImg = (a.mime||'').startsWith('image/');
+    const previewUrl = `/api/documents/${a.id}/preview`;
+    const fileUrl = `/files/${a.id}`;
+    const dup = a.duplicate_of ? `<span class="badge red">مكرر من #${a.duplicate_of}</span>` : '';
+    return `
+      <div class="attach">
+        <div class="preview">
+          ${isPdf ? `<embed src="${previewUrl}#toolbar=0" type="application/pdf">` :
+            isImg ? `<img src="${previewUrl}" alt="${esc(a.original_name)}">` :
+            `<div class="ph"><div style="font-size:32px">📄</div>معاينة غير متاحة</div>`}
+        </div>
+        <div class="meta">
+          <b>${esc(a.original_name)}</b>
+          <small>${fmtSize(a.size)} • ${fmtDate(a.created_at)} • ${esc(a.uploaded_by||'—')}</small>
+          ${dup}
+          <div class="acts">
+            <a class="btn ghost sm" href="${fileUrl}" target="_blank">فتح</a>
+            <a class="btn ghost sm" href="${previewUrl}" target="_blank">معاينة</a>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  async uploadAttachments(transNo){
+    const inp = $('#uploadFiles');
+    if(!inp.files.length){ App.toast('اختر ملفًا أولًا','warn'); return; }
+    const fd = new FormData();
+    fd.append('trans_no', transNo);
+    for(const f of inp.files) fd.append('files', f, f.name);
+    App.toast('جارٍ الرفع...');
+    const r = await api('/api/entries/'+encodeURIComponent(transNo)+'/attachments', { method:'POST', body: fd });
+    if(!r.ok){ App.toast(r.error||'فشل الرفع','err'); return; }
+    App.toast(`تم رفع ${r.count} مرفق`, 'ok');
+    this.openEntryByTransNo(transNo);
+  },
+
+  async workflow(transNo, action){
+    const r = await api(`/api/entries/${encodeURIComponent(transNo)}/${action}`, { method:'POST', body:{} });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    App.toast(action === 'archive' ? 'تمت أرشفة القيد' : 'تم إلغاء الأرشفة','ok');
+    this.openEntryByTransNo(transNo);
+  },
+
+  async setPaper(transNo, present){
+    const r = await api(`/api/entries/${encodeURIComponent(transNo)}/paper-status`, { method:'POST', body:{ present } });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    App.toast(present?'تم تسجيل وجود الورق':'تم إلغاء وجود الورق','ok');
+  },
+
+  async addNote(transNo){
+    const text = $('#noteText').value.trim();
+    if(!text){ App.toast('اكتب الملاحظة','warn'); return; }
+    const r = await api(`/api/entries/${encodeURIComponent(transNo)}/notes`, { method:'POST', body:{ note:text } });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    App.toast('تمت الإضافة','ok');
+    this.openEntryByTransNo(transNo);
+  },
+
+  async importXlsx(){
+    const imports = await api('/api/excel/imports');
+    const html = `
+      <div class="card section">
+        <div class="hd"><h3>تحديث كشف الأرشيف المعتمد</h3></div>
+        <div class="bd">
+          <p style="font-size:13.5px;color:var(--ink-2)">ارفع ملف Excel بصيغة <code>.xlsx</code> أو <code>.csv</code> يحتوي على بيانات القيود. النظام يقرأ <b>Trans #</b>, <b>Type</b>, <b>Date</b>, <b>Num</b>, <b>Name</b>, <b>Memo</b>, <b>Amount</b>/<b>Debit</b>/<b>Credit</b>, <b>Accountant</b>.</p>
+          <div class="field">
+            <label>ملف الكشف</label>
+            <input type="file" id="xlsxFile" accept=".xlsx,.xlsm,.csv">
+          </div>
+          <div class="field">
+            <label class="tag" style="cursor:pointer;padding:8px 10px">
+              <input type="checkbox" id="authoritative" style="margin-left:6px"> اعتماد ككشف نهائي (يحذف القيود غير الموجودة فيه بعد التأكد من عدم وجود مرفقات مرتبطة)
+            </label>
+          </div>
+          <div class="flex">
+            <button class="btn" onclick="Views.doPreviewXlsx()">معاينة الأعمدة</button>
+            <button class="btn ok" onclick="Views.doImportXlsx()">استيراد الآن</button>
+          </div>
+          <div id="previewArea" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h3>آخر عمليات الاستيراد</h3></div>
+        <div class="bd" style="padding:0">
+          ${(!imports.imports||imports.imports.length===0) ? `<div class="bd">${this._empty('لا توجد عمليات استيراد بعد')}</div>` : `
+          <div class="table-wrap" style="border:0">
+            <table class="data">
+              <thead><tr><th>الملف</th><th>المستخدم</th><th>صفوف جديدة</th><th>محدّثة</th><th>التوقيت</th></tr></thead>
+              <tbody>
+                ${imports.imports.map(i => `
+                  <tr>
+                    <td>${esc(i.file_name)}</td>
+                    <td>${esc(i.imported_by||'—')}</td>
+                    <td>${fmtNum(i.imported_rows||0)}</td>
+                    <td>${fmtNum(i.updated_rows||0)}</td>
+                    <td>${fmtDate(i.imported_at)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async doPreviewXlsx(){
+    const f = $('#xlsxFile').files[0];
+    if(!f){ App.toast('اختر ملفًا','warn'); return; }
+    const fd = new FormData();
+    fd.append('file', f, f.name);
+    if($('#authoritative').checked) fd.append('mode','paper');
+    App.toast('جارٍ التحليل...');
+    const r = await api('/api/excel/preview', { method:'POST', body: fd });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    $('#previewArea').innerHTML = `
+      <div class="card">
+        <div class="hd"><h3>الأعمدة المكتشفة</h3></div>
+        <div class="bd">
+          <p class="muted" style="font-size:12.5px">${r.headers.length} عمود في <b>${esc(r.filename)}</b></p>
+          <div class="flex wrap" style="margin:6px 0 12px">
+            ${r.headers.map(h => `<span class="tag">${esc(h)}</span>`).join('')}
+          </div>
+          <h4 style="font-size:13px;margin:10px 0 6px">التعيين المقترح</h4>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>الحقل</th><th>العمود</th></tr></thead>
+              <tbody>
+                ${r.fields.map(f => `<tr><td><b>${esc(f.label)}</b></td><td>${esc(r.suggested_mapping[f.key]||'—')}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  async doImportXlsx(){
+    const f = $('#xlsxFile').files[0];
+    if(!f){ App.toast('اختر ملفًا','warn'); return; }
+    if(!confirm($('#authoritative').checked ? 'سيتم اعتماد هذا الكشف كنهائي وحذف القيود غير الموجودة فيه. متابعة؟' : 'تأكيد الاستيراد؟')) return;
+    const fd = new FormData();
+    fd.append('file', f, f.name);
+    if($('#authoritative').checked) fd.append('authoritative_archive','1');
+    App.toast('جارٍ الاستيراد...');
+    const r = await api('/api/import', { method:'POST', body: fd });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    App.toast(r.message||'تم الاستيراد','ok');
+    this.importXlsx();
+  },
+
+  async paper(){
+    const html = `
+      <div class="card">
+        <div class="hd"><h3>استيراد كشف القيود الموجودة ورقيًا</h3></div>
+        <div class="bd">
+          <p style="font-size:13.5px;color:var(--ink-2)">ارفع ملفًا يحتوي على أرقام القيود الموجودة ورقيًا. سيتم تحديث حالة <b>وجود الورق</b> لكل القيود، وستُعتبر القيود غير المذكورة في الملف «غير موجودة ورقيًا».</p>
+          <div class="field">
+            <label>ملف كشف الورق</label>
+            <input type="file" id="paperFile" accept=".xlsx,.xlsm,.csv">
+          </div>
+          <button class="btn" onclick="Views.doPaperImport()">استيراد</button>
+          <div id="paperResult" style="margin-top:14px"></div>
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async doPaperImport(){
+    const f = $('#paperFile').files[0];
+    if(!f){ App.toast('اختر ملفًا','warn'); return; }
+    const fd = new FormData();
+    fd.append('file', f, f.name);
+    App.toast('جارٍ التحديث...');
+    const r = await api('/api/paper-register/import', { method:'POST', body: fd });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    $('#paperResult').innerHTML = `
+      <div class="card"><div class="bd">
+        <p><b>${esc(r.message)}</b></p>
+        <p class="muted">إجمالي: ${r.total} • مطابق: ${r.matched} • غير مطابق: ${r.unmatched}</p>
+        ${r.unmatched_samples?.length ? `<details><summary>عينات غير مطابقة</summary><div class="flex wrap" style="margin-top:6px">${r.unmatched_samples.map(s=>`<span class="tag">${esc(s)}</span>`).join('')}</div></details>` : ''}
+      </div></div>
+    `;
+    App.toast('تم التحديث','ok');
+  },
+
+  async documents(){
+    const r = await api('/api/documents');
+    if(!r.ok) throw new Error(r.error);
+    const html = `
+      <div class="card">
+        <div class="hd"><h3>كل المستندات (${r.documents.length})</h3></div>
+        <div class="bd" style="padding:0">
+          ${r.documents.length===0 ? `<div class="bd">${this._empty('لا توجد مستندات مرفوعة بعد')}</div>` : `
+          <div class="table-wrap" style="border:0">
+            <table class="data">
+              <thead><tr><th>ID</th><th class="num">رقم القيد</th><th>الاسم</th><th>الحجم</th><th>التوقيت</th><th></th></tr></thead>
+              <tbody>
+                ${r.documents.map(d => `
+                  <tr>
+                    <td>${d.id}</td>
+                    <td class="row-num">${esc(d.trans_no)}</td>
+                    <td>${esc(d.original_name)}</td>
+                    <td>${fmtSize(d.size)}</td>
+                    <td>${fmtDate(d.created_at)}</td>
+                    <td>
+                      <a class="btn ghost sm" href="/api/documents/${d.id}/preview" target="_blank">معاينة</a>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  reports(){
+    const reports = [
+      ['daily','التقرير اليومي','قيود تم تحديثها اليوم'],
+      ['missing','قيود لم تصل ورقيًا','قيود بدون استلام ورقي'],
+      ['paper-received','القيود الموجودة ورقيًا','تم استلام الورق لها'],
+      ['attachments-missing','قيود بدون مرفقات','مرفقات إلكترونية ناقصة'],
+      ['duplicates','المرفقات المكررة','ملفات مكررة بحسب SHA-256'],
+      ['archived','القيود المؤرشفة','قيود اكتملت دورتها'],
+      ['activity-log','سجل النشاط','كل حركات المستخدمين'],
+    ];
+    const html = `
+      <div class="grid cols-2">
+        ${reports.map(([key,title,desc]) => `
+          <div class="card">
+            <div class="hd"><h3>${title}</h3></div>
+            <div class="bd">
+              <p class="muted" style="font-size:12.5px;margin:0 0 12px">${desc}</p>
+              <div class="flex wrap">
+                <button class="btn sm" onclick="Views.downloadReport('${key}','xlsx')">Excel</button>
+                <button class="btn ghost sm" onclick="Views.downloadReport('${key}','csv')">CSV</button>
+                <button class="btn ghost sm" onclick="Views.viewReport('${key}')">عرض</button>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async downloadReport(name, fmt){
+    const url = `/api/reports/${name}?format=${fmt}`;
+    const r = await fetch(url, { credentials:'same-origin' });
+    if(!r.ok){ const t = await r.text(); App.toast('فشل: '+t.slice(0,100),'err'); return; }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name}.${fmt}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    App.toast('تم تنزيل التقرير','ok');
+  },
+
+  async viewReport(name){
+    const r = await api(`/api/reports/${name}?format=json`);
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    const rows = r.rows || [];
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    App.openModal(r.title || name, `
+      <p class="muted" style="font-size:12.5px">${rows.length} صفف</p>
+      <div class="table-wrap" style="margin-top:8px">
+        <table class="data">
+          <thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows.length===0 ? `<tr><td colspan="${headers.length}">${this._emptyRow('لا بيانات')}</td></tr>` :
+              rows.slice(0,200).map(r => `<tr>${headers.map(h=>`<td>${esc(r[h])}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${rows.length>200 ? `<p class="muted" style="font-size:12px;margin-top:6px">عرض أول 200 صف — حمّل Excel لكل البيانات.</p>` : ''}
+      <div class="flex end" style="margin-top:14px"><button class="btn" onclick="App.closeModal()">إغلاق</button></div>
+    `);
+  },
+
+  async audit(){
+    const r = await api('/api/audit');
+    if(!r.ok) throw new Error(r.error);
+    const html = `
+      <div class="card">
+        <div class="hd"><h3>سجل النشاط (${r.logs.length})</h3></div>
+        <div class="bd" style="padding:0">
+          ${r.logs.length===0 ? `<div class="bd">${this._empty('لا يوجد نشاط بعد')}</div>` : `
+          <div class="table-wrap" style="border:0">
+            <table class="data">
+              <thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>النوع</th><th>المعرف</th><th>IP</th><th>تفاصيل</th></tr></thead>
+              <tbody>
+                ${r.logs.map(a => `
+                  <tr>
+                    <td>${fmtDate(a.created_at)}</td>
+                    <td>${esc(a.user_name||'—')}</td>
+                    <td>${esc(a.action)}</td>
+                    <td>${esc(a.entity_type)}</td>
+                    <td>${esc(a.entity_id)}</td>
+                    <td>${esc(a.ip_address||'—')}</td>
+                    <td style="max-width:300px;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.new_value||'').slice(0,200))}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async users(){
+    const r = await api('/api/users');
+    if(!r.ok){ $('#view').innerHTML = `<div class="card"><div class="bd">${this._empty(r.error||'غير مصرح')}</div></div>`; return; }
+    const html = `
+      <div class="card section">
+        <div class="hd"><h3>إضافة مستخدم</h3></div>
+        <div class="bd">
+          <div class="row">
+            <div class="field"><label>اسم المستخدم</label><input id="nu_username" placeholder="a.mobarak"></div>
+            <div class="field"><label>الاسم الكامل</label><input id="nu_display" placeholder="ا. أحمد مبارك"></div>
+            <div class="field"><label>كلمة المرور</label><input id="nu_password" type="password" placeholder="••••••••"></div>
+            <div class="field"><label>الدور</label>
+              <select id="nu_role"><option value="user">مستخدم</option><option value="admin">مدير</option></select>
+            </div>
+            <div class="field" style="align-self:flex-end"><button class="btn" onclick="Views.createUser()">＋ إضافة</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><h3>المستخدمون (${r.users.length})</h3></div>
+        <div class="bd" style="padding:0">
+          <div class="table-wrap" style="border:0">
+            <table class="data">
+              <thead><tr><th>ID</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>نشط</th><th>تاريخ الإنشاء</th></tr></thead>
+              <tbody>
+                ${r.users.map(u => `
+                  <tr>
+                    <td>${u.id}</td>
+                    <td><b>${esc(u.username)}</b></td>
+                    <td>${esc(u.display_name)}</td>
+                    <td>${u.role==='admin'?'<span class="badge brand">مدير</span>':'<span class="badge gray">مستخدم</span>'}</td>
+                    <td>${u.is_active ? '✓' : '✕'}</td>
+                    <td>${fmtDate(u.created_at)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  async createUser(){
+    const body = {
+      username: $('#nu_username').value.trim(),
+      display_name: $('#nu_display').value.trim(),
+      password: $('#nu_password').value,
+      role: $('#nu_role').value,
+    };
+    if(!body.username || !body.password){ App.toast('أكمل البيانات','warn'); return; }
+    const r = await api('/api/users', { method:'POST', body });
+    if(!r.ok){ App.toast(r.error||'فشل','err'); return; }
+    App.toast('تمت الإضافة','ok');
+    this.users();
+  },
+
+  async settings(){
+    const r = await api('/api/settings');
+    if(!r.ok) throw new Error(r.error);
+    const h = await api('/health');
+    const html = `
+      <div class="grid cols-2">
+        <div class="card">
+          <div class="hd"><h3>حالة النظام</h3></div>
+          <div class="bd">
+            <div class="flex between"><span>الحالة</span><span class="badge ${h.status==='healthy'?'green':'red'}">${esc(h.status||'—')}</span></div>
+            <hr>
+            <div class="flex between"><span>قاعدة البيانات</span><code style="font-size:11.5px">${esc(h.database||'—')}</code></div>
+            <div class="flex between"><span>الإصدار</span><b>${esc(h.version||'—')}</b></div>
+            <div class="flex between"><span>مجلد البيانات</span><code style="font-size:11.5px">${esc(r.data_dir||'—')}</code></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><h3>معلومات الأرشفة</h3></div>
+          <div class="bd">
+            <div class="flex between"><span>نوع النظام</span><b>أرشفة قيود إلكترونية</b></div>
+            <hr>
+            <div class="flex between"><span>OCR</span><b>غير مفعّل (أرشيف فقط)</b></div>
+            <div class="flex between"><span>المطابقة الآلية</span><b>غير مفعّلة (مراجعة بصرية)</b></div>
+            <div class="flex between"><span>الخصوصية</span><b>محلي 100%</b></div>
+            <p class="muted" style="font-size:12px;margin-top:10px">النظام يعمل كأرشيف إلكتروني للقيود. المحاسب يرفع المرفقات، والمراجع يطلع عليها من السيستم مباشرة.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="hd"><h3>روابط مفيدة</h3></div>
+        <div class="bd">
+          <div class="flex wrap">
+            <a class="btn ghost sm" href="/health" target="_blank">/health</a>
+            <a class="btn ghost sm" href="/api/stats" target="_blank">/api/stats</a>
+            <a class="btn ghost sm" href="/api/dashboard" target="_blank">/api/dashboard</a>
+            <a class="btn ghost sm" href="/api/meta" target="_blank">/api/meta</a>
+            <a class="btn ghost sm" href="/api/excel/imports" target="_blank">/api/excel/imports</a>
+          </div>
+        </div>
+      </div>
+    `;
+    $('#view').innerHTML = html;
+  },
+
+  /* ===== Helpers ===== */
+  _statusBadge(s){ const k = STATUS_BADGE[s]||'gray'; return `<span class="badge ${k}">${esc(s||'—')}</span>`; },
+  _empty(text){ return `<div class="empty"><div class="ic">📭</div><h4>${esc(text)}</h4></div>`; },
+  _emptyRow(text){ return `<div class="empty" style="padding:20px"><div class="ic">🔍</div><h4>${esc(text)}</h4></div>`; },
+  _statusBars(byStatus){
+    const entries = Object.entries(byStatus);
+    if(!entries.length) return this._empty('لا توجد بيانات');
+    const total = entries.reduce((s,[,v])=>s+v,0);
+    return entries.map(([s,v]) => {
+      const pct = total ? (v/total*100) : 0;
+      const k = STATUS_BADGE[s]||'gray';
+      const colors = {gray:'#5a6776',blue:'#2563eb',green:'#16a34a',amber:'#d97706',red:'#dc2626',brand:'#176b91'};
+      return `
+        <div style="margin-bottom:10px">
+          <div class="flex between" style="font-size:12.5px;margin-bottom:4px">
+            <span>${esc(s)}</span><b>${v} (${pct.toFixed(1)}%)</b>
+          </div>
+          <div style="height:8px;background:#eef2f6;border-radius:6px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${colors[k]||'#5a6776'};transition:width .4s"></div>
+          </div>
+        </div>`;
+    }).join('');
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+window.App = App; window.Views = Views;
+</script>
+</body>
+</html>

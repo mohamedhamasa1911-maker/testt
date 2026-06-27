@@ -31,6 +31,37 @@ C:\Program Files\Tesseract-OCR\tesseract.exe
 7. شغّل `run.bat`.
 8. افتح `http://127.0.0.1:8787`.
 
+### التشغيل على Linux / macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 app.py
+# افتح http://127.0.0.1:8787
+```
+
+أول تشغيل سيطلب منك إنشاء حساب المدير الأول. بعد الإنشاء يتم تسجيل الدخول تلقائيًا.
+
+ملفات تجريبية جاهزة في `sample_data/`:
+- `sample_archive.xlsx` — 12 قيد كشف أرشيف للاستخدام في «تحديث كشف الأرشيف».
+- `sample_paper.xlsx` — 7 قيود موجود ورقيًا للاستخدام في «استيراد كشف الورق».
+
+### ملاحظة عن OCR
+
+إذا لم يكن Tesseract مثبتًا (مثل بيئة Linux الافتراضية)، يعمل النظام في الوضع الاحتياطي:
+- يستخرج النص المضمّن من PDF عبر PyMuPDF.
+- يُرجِع حقول منخفضة الثقة ويبقى القرار النهائي للمراجع.
+- لا تُرسل أي مستندات إلى الإنترنت.
+
+لتشغيل OCR الكامل ثبّت Tesseract وحدّد المسار في `.env`:
+
+```dotenv
+TESSERACT_CMD=/usr/bin/tesseract
+TESSDATA_DIR=/usr/share/tesseract-ocr/5/tessdata
+```
+
+
 للتشغيل داخل شبكة الشركة شغّل `run-network.bat` على جهاز السيرفر، ثم افتح:
 
 ```text

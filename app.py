@@ -36,7 +36,6 @@ from auth_service import (
     revoke_session,
     session_user,
 )
-from ocr_service import OCRManager
 
 BASE_DIR = SETTINGS.base_dir
 STATIC_DIR = SETTINGS.static_dir
@@ -46,7 +45,6 @@ ATTACHMENTS_DIR = SETTINGS.originals_dir
 DB_PATH = SETTINGS.db_path
 MAX_UPLOAD_BYTES = SETTINGS.max_upload_bytes
 LOGGER = logging.getLogger("qoyod_archive")
-OCR_MANAGER = OCRManager()
 SESSION_COOKIE = "qoyod_session"
 IMPORTANT_AUDIT_ACTIONS = {
     "رفع مرفق",
@@ -58,18 +56,12 @@ IMPORTANT_AUDIT_ACTIONS = {
 STATUSES = [
     "بانتظار المرفقات",
     "تم رفع المرفقات",
-    "عند المراجع",
-    "تمت المراجعة",
-    "يحتاج استكمال",
-    "تمت الأرشفة",
+    "مؤرشف",
 ]
 
 WORKFLOW_ACTIONS = {
-    "send-to-reviewer": "عند المراجع",
-    "return-from-reviewer": "تمت المراجعة",
-    "approve": "تمت المراجعة",
-    "reject": "يحتاج استكمال",
-    "archive": "تمت الأرشفة",
+    "archive": "مؤرشف",
+    "unarchive": "تم رفع المرفقات",
 }
 
 ACCOUNTANT_DISPLAY_NAMES = {
@@ -1087,143 +1079,6 @@ def parse_json_text(value: str, fallback: object) -> object:
         return fallback
 
 
-def fuzzy_score(left: object, right: object) -> int:
-    a = str(left or "").strip()
-    b = str(right or "").strip()
-    if not a or not b:
-        return 0
-    try:
-        from rapidfuzz.fuzz import ratio
-
-        return int(ratio(a, b))
-    except ImportError:
-        from difflib import SequenceMatcher
-
-        return int(SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100)
-
-
-def field_value(fields: dict, name: str) -> str:
-    item = fields.get(name) or {}
-    if isinstance(item, dict):
-        return str(item.get("value") or "").strip()
-    return str(item or "").strip()
-
-
-def calculate_match(entry: sqlite3.Row, attachment: sqlite3.Row) -> dict:
-    extraction = parse_json_text(attachment["extraction_json"], {})
-    fields = extraction.get("fields", {}) if isinstance(
-        extraction, dict) else {}
-    score = 0
-    risk = 0
-    reasons: list[str] = []
-    journal = field_value(fields, "journal_number")
-    amount_text = field_value(fields, "amount")
-    extracted_date = field_value(fields, "date")
-    project = field_value(fields, "project")
-    supplier = field_value(fields, "supplier") or field_value(fields, "client")
-    confidences = [
-        float(item.get("confidence") or 0)
-        for item in fields.values()
-        if isinstance(item, dict) and item.get("value") not in (None, "")
-    ]
-
-    if attachment["duplicate_of"]:
-        return {
-            "status": "مكرر",
-            "score": 0,
-            "risk": 100,
-            "reasons": [f"نفس الملف مرفوع سابقًا برقم {attachment['duplicate_of']}"],
-        }
-
-    if journal:
-        if normalize_header(journal) == normalize_header(entry["trans_no"]):
-            score += 50
-            reasons.append("رقم القيد مطابق")
-        else:
-            risk += 50
-            reasons.append(
-                f"رقم القيد المستخرج {journal} مختلف عن {entry['trans_no']}")
-    else:
-        reasons.append("رقم القيد غير مقروء ويحتاج مراجعة")
-
-    if amount_text:
-        extracted_amount = normalize_amount(amount_text)
-        expected_amount = normalize_amount(entry["amount"])
-        tolerance = max(1.0, abs(expected_amount) * 0.001)
-        if expected_amount and abs(extracted_amount - expected_amount) <= tolerance:
-            score += 20
-            reasons.append("المبلغ مطابق")
-        elif expected_amount:
-            risk += 25
-            reasons.append(
-                f"المبلغ المستخرج {extracted_amount:g} مختلف عن {expected_amount:g}")
-    elif normalize_amount(entry["amount"]):
-        risk += 10
-        reasons.append("المبلغ غير مقروء ويحتاج تأكيد المراجع")
-
-    if extracted_date:
-        date_digits = re.sub(r"\D", "", extracted_date)
-        expected_digits = re.sub(r"\D", "", str(entry["entry_date"] or ""))
-        if date_digits and expected_digits and (
-            date_digits == expected_digits or date_digits[::-
-                                                          1] == expected_digits
-        ):
-            score += 15
-            reasons.append("التاريخ مطابق")
-        elif expected_digits:
-            risk += 15
-            reasons.append("التاريخ مختلف أو يحتاج تأكيد")
-    elif entry["entry_date"]:
-        risk += 5
-        reasons.append("التاريخ غير مقروء ويحتاج تأكيد المراجع")
-
-    if project and entry["project"]:
-        similarity = fuzzy_score(project, entry["project"])
-        if similarity >= 80:
-            score += 10
-            reasons.append("المشروع متقارب")
-        elif similarity < 50:
-            risk += 10
-            reasons.append("اسم المشروع غير متطابق")
-
-    expected_party = entry["supplier"] or entry["client"] or entry["name"]
-    if supplier and expected_party:
-        similarity = fuzzy_score(supplier, expected_party)
-        if similarity >= 75:
-            score += 5
-            reasons.append("اسم الجهة متقارب")
-        elif similarity < 45:
-            risk += 5
-            reasons.append("اسم الجهة يحتاج مراجعة")
-    elif expected_party:
-        reasons.append("اسم الجهة غير مقروء ويحتاج مراجعة بشرية")
-
-    if confidences:
-        average_confidence = sum(confidences) / len(confidences)
-        if average_confidence < 0.5:
-            risk += 15
-            reasons.append("جودة قراءة OCR منخفضة")
-        else:
-            reasons.append(f"متوسط ثقة OCR {average_confidence * 100:.0f}%")
-
-    if not attachment["extraction_json"] or attachment["extraction_status"] in {"", "لم يبدأ", "بانتظار الاستخراج"}:
-        return {
-            "status": "محتاج مراجعة يدوية",
-            "score": 0,
-            "risk": 20,
-            "reasons": ["لم يتم استخراج بيانات المستند بعد"],
-        }
-    if risk >= 40:
-        status = "غير مطابق"
-    elif score >= 85 and risk == 0:
-        status = "مطابق 100%"
-    elif score >= 50:
-        status = "مطابق جزئيًا"
-    else:
-        status = "محتاج مراجعة يدوية"
-    return {"status": status, "score": min(score, 100), "risk": min(risk, 100), "reasons": reasons}
-
-
 class ArchiveHandler(BaseHTTPRequestHandler):
     server_version = "QoyodArchive/2.0"
 
@@ -1362,8 +1217,6 @@ class ArchiveHandler(BaseHTTPRequestHandler):
                 return self.handle_document_preview(int(document_preview.group(1)))
             if path == "/api/documents":
                 return self.handle_documents(parsed.query)
-            if path == "/api/matching/results":
-                return self.handle_matching_results(parsed.query)
             if path == "/api/audit":
                 return self.handle_audit(parsed.query)
             if path.startswith("/api/reports/"):
@@ -1513,21 +1366,8 @@ class ArchiveHandler(BaseHTTPRequestHandler):
                 return self.handle_activity()
             if path == "/api/documents/upload":
                 return self.handle_document_upload()
-            if path.startswith("/api/documents/") and path.endswith("/extract"):
-                attachment_id = int(path.removeprefix(
-                    "/api/documents/").removesuffix("/extract").strip("/"))
-                return self.handle_extract(attachment_id)
-            if path == "/api/matching/run":
-                return self.handle_matching_run()
-            if path.startswith("/api/matching/") and path.endswith(("/confirm", "/reject")):
-                action = "confirm" if path.endswith("/confirm") else "reject"
-                result_id = int(
-                    path.removeprefix(
-                        "/api/matching/").removesuffix(f"/{action}").strip("/")
-                )
-                return self.handle_matching_decision(result_id, action)
             workflow_match = re.fullmatch(
-                r"/api/(?:journals|entries)/([^/]+)/(send-to-reviewer|return-from-reviewer|approve|reject|archive)",
+                r"/api/(?:journals|entries)/([^/]+)/(archive|unarchive)",
                 path,
             )
             if workflow_match:
@@ -1641,52 +1481,12 @@ class ArchiveHandler(BaseHTTPRequestHandler):
         )
 
     def handle_settings(self) -> None:
-        tesseract_available = False
-        try:
-            from ocr_service.local_tesseract import LocalTesseractProvider
-
-            LocalTesseractProvider(
-                SETTINGS.ocr_languages,
-                SETTINGS.tesseract_cmd,
-                SETTINGS.tessdata_dir,
-            )._load()
-            tesseract_available = True
-        except Exception:
-            pass
-        providers = {
-            "local": {"configured": tesseract_available, "label": "Tesseract محلي"},
-            "openai": {"configured": bool(os.environ.get("OPENAI_API_KEY")), "label": "OpenAI Vision"},
-            "google": {
-                "configured": bool(
-                    os.environ.get("GOOGLE_PROJECT_ID") and os.environ.get(
-                        "GOOGLE_PROCESSOR_ID")
-                ),
-                "label": "Google Document AI",
-            },
-            "azure": {
-                "configured": bool(
-                    os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
-                    and os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_KEY")
-                ),
-                "label": "Azure Document Intelligence",
-            },
-            "aws": {
-                "configured": bool(
-                    (
-                        os.environ.get("AWS_ACCESS_KEY_ID")
-                        and os.environ.get("AWS_SECRET_ACCESS_KEY")
-                    )
-                    or os.environ.get("AWS_PROFILE")
-                ),
-                "label": "AWS Textract",
-            },
-        }
         self.send_json(
             {
                 "ok": True,
-                "active_ocr_provider": SETTINGS.ocr_provider,
+                "active_ocr_provider": "none",
                 "ocr_languages": SETTINGS.ocr_languages,
-                "providers": providers,
+                "providers": {},
                 "manual_review_available": True,
                 "data_dir": str(DATA_DIR),
             }
@@ -1770,31 +1570,6 @@ class ArchiveHandler(BaseHTTPRequestHandler):
                 "Preview generation failed for attachment %s", attachment_id)
             raise RuntimeError(f"تعذر إنشاء معاينة لهذا الملف: {exc}") from exc
 
-    def handle_matching_results(self, query: str) -> None:
-        params = parse_qs(query)
-        trans_no = (params.get("trans_no", [""])[0] or "").strip()
-        where = "WHERE m.trans_no = ?" if trans_no else ""
-        args = [trans_no] if trans_no else []
-        with connect_db() as conn:
-            rows = conn.execute(
-                f"""
-                SELECT m.*, a.original_name
-                FROM matching_results m
-                JOIN attachments a ON a.id = m.document_id
-                {where}
-                ORDER BY m.created_at DESC
-                LIMIT 300
-                """,
-                args,
-            ).fetchall()
-        results = []
-        for row in rows:
-            item = dict(row)
-            item["reasons"] = parse_json_text(
-                item.pop("reasons_json", "[]"), [])
-            results.append(item)
-        self.send_json({"ok": True, "results": results})
-
     def handle_audit(self, query: str) -> None:
         self.require_user()
         params = parse_qs(query)
@@ -1842,17 +1617,19 @@ class ArchiveHandler(BaseHTTPRequestHandler):
     def handle_dashboard(self) -> None:
         self.require_user()
         with connect_db() as conn:
-            at_reviewer = conn.execute(
-                "SELECT COUNT(*) FROM entries WHERE status = 'عند المراجع'"
+            archived = conn.execute(
+                "SELECT COUNT(*) FROM entries WHERE status = 'مؤرشف'"
             ).fetchone()[0]
-            risk = conn.execute(
-                "SELECT COUNT(*) FROM entries WHERE risk_score > 0"
-            ).fetchone()[0]
-            ready = conn.execute(
+            pending = conn.execute(
                 """
                 SELECT COUNT(*) FROM entries
-                WHERE match_status IN ('مطابق 100%', 'مطابق جزئيًا')
-                  AND status NOT IN ('تمت المراجعة', 'تمت الأرشفة')
+                WHERE status IN ('بانتظار المرفقات', 'تم رفع المرفقات')
+                """
+            ).fetchone()[0]
+            with_attachments = conn.execute(
+                """
+                SELECT COUNT(DISTINCT e.trans_no) FROM entries e
+                JOIN attachments a ON a.trans_no = e.trans_no
                 """
             ).fetchone()[0]
             missing = conn.execute(
@@ -1868,17 +1645,12 @@ class ArchiveHandler(BaseHTTPRequestHandler):
             queue = conn.execute(
                 """
                 SELECT e.trans_no, e.entry_date, e.name, e.accountant, e.amount,
-                       e.status, e.match_status, e.risk_score, COUNT(a.id) attachments_count
+                       e.status, COUNT(a.id) attachments_count
                 FROM entries e
                 LEFT JOIN attachments a ON a.trans_no = e.trans_no
-                WHERE e.status = 'عند المراجع'
-                   OR e.risk_score > 0
-                   OR e.match_status IN ('مطابق 100%', 'مطابق جزئيًا', 'محتاج مراجعة يدوية')
+                WHERE e.status != 'مؤرشف'
                 GROUP BY e.trans_no
-                ORDER BY
-                    CASE WHEN e.status = 'عند المراجع' THEN 0 ELSE 1 END,
-                    e.risk_score DESC,
-                    e.updated_at DESC
+                ORDER BY e.updated_at DESC
                 LIMIT 100
                 """
             ).fetchall()
@@ -1888,9 +1660,9 @@ class ArchiveHandler(BaseHTTPRequestHandler):
         self.send_json(
             {
                 "ok": True,
-                "at_reviewer": at_reviewer,
-                "risk": risk,
-                "ready": ready,
+                "archived": archived,
+                "pending": pending,
+                "with_attachments": with_attachments,
                 "missing": missing,
                 "today_actions": today_actions,
                 "queue": [dict(row) for row in queue],
@@ -1960,23 +1732,15 @@ class ArchiveHandler(BaseHTTPRequestHandler):
                 """,
                 "المرفقات المكررة",
             ),
-            "reviewer-ready": (
+            "archived": (
                 """
-                SELECT e.trans_no, e.entry_date, e.entry_type, e.project, e.name, e.amount,
-                       e.match_status, e.risk_score, e.status
+                SELECT e.trans_no, e.entry_date, e.entry_type, e.num, e.name, e.description,
+                       e.amount, e.accountant, e.archive_date
                 FROM entries e
-                WHERE e.match_status IN ('مطابق 100%', 'مطابق جزئيًا')
-                  AND e.status NOT IN ('تمت الأرشفة', 'عند المراجع')
-                ORDER BY e.risk_score, e.trans_no
+                WHERE e.status = 'مؤرشف'
+                ORDER BY e.archive_date DESC, e.trans_no
                 """,
-                "القيود الجاهزة للمراجع",
-            ),
-            "risk": (
-                """
-                SELECT trans_no, entry_date, project, name, amount, match_status, risk_score, status
-                FROM entries WHERE risk_score > 0 ORDER BY risk_score DESC, trans_no
-                """,
-                "تقرير مخاطر المطابقة",
+                "القيود المؤرشفة",
             ),
             "activity-log": (
                 """
@@ -2103,15 +1867,8 @@ dt{{color:#667174;font-weight:bold}} dd{{font-size:22px;font-weight:bold;margin:
             duplicates = conn.execute(
                 "SELECT COUNT(*) FROM attachments WHERE duplicate_of IS NOT NULL"
             ).fetchone()[0]
-            needs_review = conn.execute(
-                """
-                SELECT COUNT(*) FROM entries
-                WHERE match_status IN ('محتاج مراجعة يدوية', 'غير مطابق', 'مطابق جزئيًا')
-                   OR risk_score > 0
-                """
-            ).fetchone()[0]
-            matched = conn.execute(
-                "SELECT COUNT(*) FROM entries WHERE match_status IN ('مطابق 100%', 'تم تأكيد المطابقة')"
+            archived = conn.execute(
+                "SELECT COUNT(*) FROM entries WHERE status = 'مؤرشف'"
             ).fetchone()[0]
             scanned = conn.execute(
                 "SELECT COUNT(DISTINCT trans_no) FROM attachments").fetchone()[0]
@@ -2127,9 +1884,8 @@ dt{{color:#667174;font-weight:bold}} dd{{font-size:22px;font-weight:bold;margin:
                 "attachments_count": attachments[0],
                 "attachments_size": attachments[1],
                 "scanned": scanned,
-                "matched": matched,
+                "archived": archived,
                 "duplicates": duplicates,
-                "needs_review": needs_review,
                 "paper_received": paper_received,
                 "paper_missing": paper_missing,
                 "by_status": {row["status"]: row["c"] for row in status_rows},
@@ -2215,16 +1971,6 @@ dt{{color:#667174;font-weight:bold}} dd{{font-size:22px;font-weight:bold;margin:
                 "SELECT * FROM notes WHERE trans_no = ? ORDER BY created_at DESC",
                 (trans_no,),
             ).fetchall()
-            matches = conn.execute(
-                """
-                SELECT m.*, a.original_name
-                FROM matching_results m
-                JOIN attachments a ON a.id = m.document_id
-                WHERE m.trans_no = ?
-                ORDER BY m.created_at DESC
-                """,
-                (trans_no,),
-            ).fetchall()
             audit_rows = conn.execute(
                 "SELECT * FROM audit_logs WHERE entity_id = ? ORDER BY created_at DESC LIMIT 50",
                 (trans_no,),
@@ -2241,13 +1987,6 @@ dt{{color:#667174;font-weight:bold}} dd{{font-size:22px;font-weight:bold;margin:
                 "entry": row_to_entry(row),
                 "attachments": [dict(item) for item in attachments],
                 "notes": [dict(item) for item in notes],
-                "matches": [
-                    {
-                        **dict(item),
-                        "reasons": parse_json_text(item["reasons_json"], []),
-                    }
-                    for item in matches
-                ],
                 "audit": [dict(item) for item in audit_rows],
             }
         )
@@ -2582,192 +2321,6 @@ dt{{color:#667174;font-weight:bold}} dd{{font-size:22px;font-weight:bold;margin:
             conn.commit()
         self.send_json({"ok": True, "document_ids": ids,
                        "count": len(ids), "trans_no": trans_no})
-
-    def handle_extract(self, attachment_id: int) -> None:
-        payload = read_json(self)
-        provider_name = str(payload.get("provider") or "").strip().lower()
-        user_name = self.request_user(
-            explicit=str(payload.get("user_name") or ""))
-        if not user_name:
-            raise ValueError("اكتب اسم منفذ فحص OCR.")
-        with connect_db() as conn:
-            attachment = conn.execute(
-                "SELECT * FROM attachments WHERE id = ?", (attachment_id,)
-            ).fetchone()
-        if not attachment:
-            return self.send_error_json("المرفق غير موجود.", 404)
-        path = attachment_path(attachment)
-        if not path.exists():
-            return self.send_error_json("ملف المرفق غير موجود على الجهاز.", 404)
-        result = OCR_MANAGER.extract(path, attachment["mime"], provider_name)
-        result_payload = result.to_dict()
-        extraction_status = "يحتاج مراجعة يدوية" if result.requires_manual_review else "تم الاستخراج"
-        with connect_db() as conn:
-            conn.execute(
-                """
-                UPDATE attachments
-                SET ocr_text = ?, ocr_provider = ?, extraction_status = ?, extraction_json = ?
-                WHERE id = ?
-                """,
-                (
-                    result.text,
-                    result.provider,
-                    extraction_status,
-                    json.dumps(result_payload, ensure_ascii=False),
-                    attachment_id,
-                ),
-            )
-            conn.execute(
-                "DELETE FROM extracted_fields WHERE document_id = ?", (attachment_id,))
-            for name, item in result_payload["fields"].items():
-                conn.execute(
-                    """
-                    INSERT INTO extracted_fields (
-                        document_id, field_name, field_value, confidence, is_uncertain
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        attachment_id,
-                        name,
-                        str(item.get("value") or ""),
-                        float(item.get("confidence") or 0),
-                        1 if name in result.uncertain_fields else 0,
-                    ),
-                )
-            audit(
-                conn,
-                "استخراج OCR",
-                "attachment",
-                attachment_id,
-                user_name,
-                "",
-                {
-                    "provider": result.provider,
-                    "status": extraction_status,
-                    "fallback": result.fallback_used,
-                },
-                self.client_ip(),
-            )
-            conn.commit()
-        self.send_json(
-            {
-                "ok": True,
-                "document_id": attachment_id,
-                "status": extraction_status,
-                "result": result_payload,
-            }
-        )
-
-    def handle_matching_run(self) -> None:
-        payload = read_json(self)
-        document_id = int(payload.get("document_id") or 0)
-        trans_no = str(payload.get("trans_no") or "").strip()
-        user_name = self.request_user(
-            explicit=str(payload.get("user_name") or ""))
-        if not user_name:
-            raise ValueError("اكتب اسم المراجع قبل تشغيل المراجعة والمطابقة.")
-        clauses = []
-        args: list[object] = []
-        if document_id:
-            clauses.append("a.id = ?")
-            args.append(document_id)
-        if trans_no:
-            clauses.append("a.trans_no = ?")
-            args.append(trans_no)
-        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        saved = []
-        with connect_db() as conn:
-            documents = conn.execute(
-                f"""
-                SELECT a.*, e.*
-                FROM attachments a
-                JOIN entries e ON e.trans_no = a.trans_no
-                {where}
-                ORDER BY a.created_at DESC
-                LIMIT 500
-                """,
-                args,
-            ).fetchall()
-            for row in documents:
-                match = calculate_match(row, row)
-                cursor = conn.execute(
-                    """
-                    INSERT INTO matching_results (
-                        document_id, trans_no, match_status, confidence_score,
-                        risk_score, reasons_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        row["id"],
-                        row["trans_no"],
-                        match["status"],
-                        match["score"],
-                        match["risk"],
-                        json.dumps(match["reasons"], ensure_ascii=False),
-                        now_iso(),
-                    ),
-                )
-                conn.execute(
-                    """
-                    UPDATE entries
-                    SET match_status = ?, risk_score = ?, updated_at = ?
-                    WHERE trans_no = ?
-                    """,
-                    (match["status"], match["risk"],
-                     now_iso(), row["trans_no"]),
-                )
-                saved.append(
-                    {"id": cursor.lastrowid, "document_id": row["id"], **match})
-            audit(
-                conn,
-                "تشغيل المطابقة",
-                "matching_batch",
-                trans_no or document_id or "all",
-                user_name,
-                "",
-                {"documents": len(saved)},
-                self.client_ip(),
-            )
-            conn.commit()
-        self.send_json({"ok": True, "count": len(saved), "results": saved})
-
-    def handle_matching_decision(self, result_id: int, action: str) -> None:
-        payload = read_json(self)
-        user_name = self.request_user(
-            explicit=str(payload.get("user_name") or ""))
-        if not user_name:
-            raise ValueError("اكتب اسم المراجع قبل اعتماد نتيجة المطابقة.")
-        with connect_db() as conn:
-            row = conn.execute(
-                "SELECT * FROM matching_results WHERE id = ?", (result_id,)
-            ).fetchone()
-            if not row:
-                return self.send_error_json("نتيجة المطابقة غير موجودة.", 404)
-            new_status = "تم تأكيد المطابقة" if action == "confirm" else "تم رفض المطابقة"
-            conn.execute(
-                """
-                UPDATE matching_results
-                SET match_status = ?, reviewed_by = ?, reviewed_at = ?
-                WHERE id = ?
-                """,
-                (new_status, user_name, now_iso(), result_id),
-            )
-            conn.execute(
-                "UPDATE entries SET match_status = ?, updated_at = ? WHERE trans_no = ?",
-                (new_status, now_iso(), row["trans_no"]),
-            )
-            audit(
-                conn,
-                "تأكيد المطابقة" if action == "confirm" else "رفض المطابقة",
-                "matching_result",
-                result_id,
-                user_name,
-                row["match_status"],
-                new_status,
-                self.client_ip(),
-            )
-            conn.commit()
-        self.send_json({"ok": True, "id": result_id, "status": new_status})
 
     def handle_workflow(self, trans_no: str, action: str) -> None:
         payload = read_json(self)
